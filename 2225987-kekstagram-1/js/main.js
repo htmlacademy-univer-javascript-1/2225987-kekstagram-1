@@ -1,7 +1,5 @@
+import {getObjectOutput} from './data.js';
+import {createPhotosFragment} from './picture.js';
 
-import {createInfoPost} from './data.js'
-
-
-const similarPosts = Array.from({length: 25}, createInfoPost);
-
-console.log(createInfoPost);
+const photosData = getObjectOutput();
+createPhotosFragment(photosData);
