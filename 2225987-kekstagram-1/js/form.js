@@ -1,17 +1,32 @@
 import {isEscapeKey} from './util.js';
+import {onFilterButtonChange, onScaleButtonClick, scaleContainer, effectList, sliderWrapper} from './effects.js';
+import {sendData} from './api.js';
+import {showMessageSuccess, showMessageError} from './messages.js';
 
+const FILE_TYPES = ['gif', 'jpg', 'jpeg', 'png', 'heic'];
 const MAX_STRING_LENGTH = 140;
 const HASHTAGS_QUANTITY = 5;
 const imgUploadField = document.querySelector('#upload-file');
 const editPhoto = document.querySelector('.img-upload__overlay');
 const form = document.querySelector('.img-upload__form');
 const buttonCancel = document.querySelector('.img-upload__cancel');
+const buttonSubmit = document.querySelector('.img-upload__submit');
 const imgPreview = document.querySelector('.img-upload__preview').querySelector('img');
 const body = document.querySelector('body');
 const hashtagsField = document.querySelector('.text__hashtags');
 const commentsField = document.querySelector('.text__description');
 const regex = /^#[A-Za-zА-Яа-яЁё0-9]{1,19}$/;
+const fileChooser = document.querySelector('.img-upload__input');
 
+const uploadImage = () => {
+  const file = fileChooser.files[0];
+  const fileName = file.name.toLowerCase();
+
+  const matches = FILE_TYPES.some((it) => fileName.endsWith(it));
+  if (matches) {
+    imgPreview.src = URL.createObjectURL(file);
+  }
+};
 
 const checkCommentsLength = (value) => value.length <= MAX_STRING_LENGTH;
 
@@ -54,6 +69,10 @@ function closeUploadPopup  () {
   body.classList.remove('modal-open');
   document.removeEventListener('keydown', onPopupEscKeydown);
   document.removeEventListener('click', onPopupCloseButtonClick);
+  scaleContainer.removeEventListener('click', onScaleButtonClick);
+  effectList.removeEventListener('change', onFilterButtonChange);
+  imgPreview.removeAttribute('class');
+  imgPreview.removeAttribute('style');
   form.reset();
 }
 
@@ -73,39 +92,68 @@ const onFocusBlurEscKeydown = () => {
   });
 };
 
-const showUploadPopup = (evt) => {
-  imgPreview.src = URL.createObjectURL(evt.target.files[0]);
+const blockSubmitButton = () => {
+  buttonSubmit.disabled = true;
+  buttonSubmit.textContent = 'Публикую...';
+};
+
+const unblockSubmitButton = () => {
+  buttonSubmit.disabled = false;
+  buttonSubmit.textContent = 'Опубликовать';
+};
+
+
+function showUploadPopup (evt) {
   editPhoto.classList.remove('hidden');
   body.classList.add('modal-open');
   buttonCancel.addEventListener('click', onPopupCloseButtonClick);
   document.addEventListener('keydown',onPopupEscKeydown);
   onFocusBlurEscKeydown();
-};
+  sliderWrapper.classList.add('hidden');
+  scaleContainer.addEventListener('click', onScaleButtonClick);
+  effectList.addEventListener('change', onFilterButtonChange);
+  uploadImage(evt);
+}
 
-const validateForm = () => {
-  const pristine = new Pristine(form, {
-    classTo: 'text',
-    errorClass: 'text--invalid',
-    successClass: 'text-valid',
-    errorTextParent: 'text',
-    errorTextTag: 'div',
-    errorTextClass: 'text__error'
-  });
-  pristine.addValidator(commentsField, checkCommentsLength, `Не более ${MAX_STRING_LENGTH} символов`);
-  pristine.addValidator(hashtagsField, getUniqueHashtags, 'Хэштеги не могут повторяться');
-  pristine.addValidator(hashtagsField, checkQuantity, 'Не более 5 хэштегов');
-  pristine.addValidator(hashtagsField, getHashtagsToLowerCase, '');
-  pristine.addValidator(hashtagsField, checkHashtagsSymbols, 'Хэштег должен начинатьтся с #, содержать только буквы и цифры, не более 20 символов');
+const pristine = new Pristine(form, {
+  classTo: 'text',
+  errorClass: 'text--invalid',
+  successClass: 'text-valid',
+  errorTextParent: 'text',
+  errorTextTag: 'div',
+  errorTextClass: 'text__error'
+});
+pristine.addValidator(commentsField, checkCommentsLength, `Не более ${MAX_STRING_LENGTH} символов`);
+pristine.addValidator(hashtagsField, getUniqueHashtags, 'Хэштеги не могут повторяться');
+pristine.addValidator(hashtagsField, checkQuantity, 'Не более 5 хэштегов');
+pristine.addValidator(hashtagsField, getHashtagsToLowerCase, '');
+pristine.addValidator(hashtagsField, checkHashtagsSymbols, 'Хэштег должен начинатьтся с #, содержать только буквы и цифры, не более 20 символов');
+
+
+const submitForm = (onSuccess) => {
   form.addEventListener('submit', (evt) => {
-    if (!pristine.validate()) {
-      evt.preventDefault();
+    evt.preventDefault();
+    const isValid = pristine.validate();
+    if (isValid) {
+      blockSubmitButton();
+      sendData(
+        () => {
+          onSuccess();
+          unblockSubmitButton();
+          showMessageSuccess();
+          closeUploadPopup();
+        },
+        () => {
+          unblockSubmitButton();
+          showMessageError();
+          closeUploadPopup();
+        },
+        new FormData(evt.target),
+      );
     }
   });
 };
 
-const renderUploadForm = () => {
-  imgUploadField.addEventListener('change', showUploadPopup);
-  validateForm();
-};
+imgUploadField.addEventListener('change', showUploadPopup);
 
-export {renderUploadForm};
+export {closeUploadPopup, submitForm, imgUploadField, showUploadPopup, body};
